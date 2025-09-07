@@ -53,6 +53,10 @@ def print_error(message: str):
     """Prints an error message."""
     console.print(f"[bold red]Error:[/bold red] {message}")
 
+def print_warning(message: str):
+    """Prints a warning message."""
+    console.print(f"[bold yellow]Warning:[/bold yellow] {message}")
+
 def ask_question(prompt: str, choices: list[str] | None = None, default: str | None = None) -> str:
     """
 

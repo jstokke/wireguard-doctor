@@ -1,6 +1,6 @@
 import configparser
 import os
-import ui # Import the ui module
+import ui
 
 def parse_config(config_path: str) -> dict | None:
     """
@@ -21,13 +21,16 @@ def parse_config(config_path: str) -> dict | None:
     try:
         config.read(config_path)
 
-        # Basic details
+        # --- [Interface] Section ---
         client_private_key = config.get('Interface', 'PrivateKey')
+        client_address = config.get('Interface', 'Address', fallback=None)
+        client_dns = config.get('Interface', 'DNS', fallback=None)
+
+        # --- [Peer] Section ---
         server_public_key = config.get('Peer', 'PublicKey')
         endpoint = config.get('Peer', 'Endpoint')
-
-        # Also get Address for later use in post-handshake checks
-        client_address = config.get('Interface', 'Address', fallback=None)
+        allowed_ips = config.get('Peer', 'AllowedIPs', fallback='0.0.0.0/0') # Default to all traffic for logic
+        persistent_keepalive = config.get('Peer', 'PersistentKeepalive', fallback=None)
 
         # Extract IP and port from endpoint
         endpoint_ip, endpoint_port = endpoint.rsplit(':', 1)
@@ -36,11 +39,12 @@ def parse_config(config_path: str) -> dict | None:
             'client_private_key': client_private_key,
             'server_public_key': server_public_key,
             'endpoint_ip': endpoint_ip,
-            'endpoint_port': int(endpoint_port)
+            'endpoint_port': int(endpoint_port),
+            'Address': client_address,
+            'DNS': client_dns,
+            'AllowedIPs': allowed_ips,
+            'PersistentKeepalive': persistent_keepalive
         }
-
-        if client_address:
-            parsed_data['Address'] = client_address
 
         return parsed_data
 

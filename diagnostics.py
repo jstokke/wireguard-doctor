@@ -4,6 +4,7 @@ import platform
 import socket
 import time
 from typing import Tuple
+import textwrap
 
 import ui
 
@@ -151,3 +152,48 @@ def check_dns() -> bool:
     except socket.gaierror:
         ui.end_task(status, success=False, message="DNS resolution failed. This is likely the cause of the 'no internet' issue.")
         return False
+
+def lint_config(config: dict):
+    """
+    Analyzes the configuration for common best-practice issues and prints warnings.
+    """
+    ui.print_info("Linting configuration for best practices...")
+
+    # Check for DNS leak potential
+    if '0.0.0.0/0' in config.get('AllowedIPs', '') and not config.get('DNS'):
+        ui.print_warning("Your 'AllowedIPs' is set to route all traffic through the VPN, but you have not set a 'DNS' server in your config. This can lead to DNS leaks.")
+        ui.print_info("Suggestion: Add 'DNS = 1.1.1.1' (or another trusted DNS) to your [Interface] section.")
+
+    # Check for missing PersistentKeepalive
+    if not config.get('PersistentKeepalive'):
+        ui.print_warning("Your configuration is missing 'PersistentKeepalive' in the [Peer] section.")
+        ui.print_info("Suggestion: Add 'PersistentKeepalive = 25' to maintain a stable connection, especially through NAT and firewalls.")
+
+def check_mtu():
+    """
+    Provides information and commands for the user to check for MTU issues.
+    """
+    ui.print_info("Checking for potential MTU issues...")
+    ui.console.print(textwrap.dedent("""
+        [bold cyan]What is MTU?[/bold cyan]
+        MTU (Maximum Transmission Unit) defines the largest packet size that can be sent over a network. If some websites load but others (especially ones with rich content) fail, it might be an MTU issue. Your packets are too big and get dropped.
+
+        [bold cyan]How to Test Manually:[/bold cyan]
+        WG-Doctor can't run this test automatically, but you can do it easily. You need to find the largest packet size that doesn't fragment.
+
+        [bold]On Linux or macOS:[/bold]
+        Run this command, starting with a size of 1472 and decreasing it until the ping works:
+        `ping -M do -s 1472 <SERVER_IP>`
+        (Replace <SERVER_IP> with your WG server's IP address)
+
+        - If you see "Frag needed and DF set" or similar, the size is too big. Lower it by 10-20 and try again.
+        - Once the ping succeeds, take that size and add 28 (for the IP/ICMP headers). The result is your optimal MTU. For example, if `ping -s 1440` works, your MTU is 1468.
+
+        [bold]On Windows:[/bold]
+        Run this command, starting with a size of 1472 and decreasing it:
+        `ping -f -l 1472 <SERVER_IP>`
+
+        [bold cyan]The Fix:[/bold cyan]
+        Once you find the right MTU value (e.g., 1468), add it to your `.conf` file under the `[Interface]` section:
+        `MTU = 1468`
+    """))

@@ -3,6 +3,7 @@ import os
 import sys
 import textwrap
 import subprocess
+import platform
 
 import config_parser
 import diagnostics
@@ -98,6 +99,9 @@ def run_post_handshake_checks(config):
                 - This rule needs to be saved so it persists after a reboot. The `iptables-persistent` package can help.
         """))
 
+        # Finally, check for MTU issues
+        diagnostics.check_mtu()
+
 def main():
     parser = argparse.ArgumentParser(
         description="WG-Doctor: A command-line tool to diagnose WireGuard connectivity issues.",
@@ -115,6 +119,9 @@ def main():
     config = config_parser.parse_config(args.config_file)
     if not config:
         sys.exit(1)
+
+    # Run the configuration linter for best practices
+    diagnostics.lint_config(config)
 
     derived_pubkey = diagnostics.derive_public_key(config['client_private_key'])
     if not derived_pubkey:
@@ -142,13 +149,14 @@ def main():
 
 if __name__ == "__main__":
     try:
-        # Re-run with sudo if needed to ensure correct python env is used with root privileges
-        if os.geteuid() != 0 and 'SUDO_UID' not in os.environ:
-             ui.print_info("WG-Doctor needs root privileges. Re-running with sudo...")
-             # Use sys.executable to ensure we use the same python interpreter
-             args = ['sudo', sys.executable] + sys.argv
-             subprocess.check_call(args)
-             sys.exit() # Exit the non-privileged process
+        # On non-Windows systems, check for root and re-run with sudo if needed.
+        if platform.system() != "Windows":
+            if os.geteuid() != 0 and 'SUDO_UID' not in os.environ:
+                ui.print_info("WG-Doctor needs root privileges. Re-running with sudo...")
+                # Use sys.executable to ensure we use the same python interpreter
+                args = ['sudo', sys.executable] + sys.argv
+                subprocess.check_call(args)
+                sys.exit()  # Exit the non-privileged process
         main()
     except KeyboardInterrupt:
         print("\nExiting.")
