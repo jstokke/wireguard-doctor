@@ -17,16 +17,47 @@ def check_tools() -> bool:
     wg_path = shutil.which("wg")
     ping_path = shutil.which("ping")
 
+    if wg_path and ping_path:
+        ui.end_task(status, success=True, message="Required tools are available.")
+        return True
+
+    # If tools are missing, stop the spinner and provide detailed help
+    status.stop()
     if not wg_path:
-        ui.end_task(status, success=False, message="`wg` command not found. Is WireGuard installed and in your PATH?")
+        ui.print_error("`wg` command not found. WireGuard tools are not installed or not in your system's PATH.")
+
+        os_type = platform.system()
+        if os_type == "Linux":
+            ui.console.print(textwrap.dedent("""
+                [bold cyan]How to Install on Linux:[/bold cyan]
+                Open your terminal and use your distribution's package manager.
+                - For Debian/Ubuntu: `sudo apt-get update && sudo apt-get install wireguard-tools`
+                - For Fedora/CentOS/RHEL: `sudo dnf install wireguard-tools`
+                - For Arch Linux: `sudo pacman -S wireguard-tools`
+            """))
+        elif os_type == "Darwin": # macOS
+            ui.console.print(textwrap.dedent("""
+                [bold cyan]How to Install on macOS:[/bold cyan]
+                You have two main options:
+                1.  [bold]App Store (Recommended):[/bold] Install the official "WireGuard" application from the Mac App Store.
+                2.  [bold]Homebrew (for command-line users):[/bold] Run `brew install wireguard-tools` in your terminal.
+            """))
+        elif os_type == "Windows":
+            ui.console.print(textwrap.dedent("""
+                [bold cyan]How to Install on Windows:[/bold cyan]
+                The `wg` tool is included with the official WireGuard installer.
+                - Download and run the installer from [bold blue]https://www.wireguard.com/install/[/bold blue]
+                - After installation, the `wg` command will be available in the Command Prompt or PowerShell.
+            """))
+        else:
+            ui.print_warning(f"Unsupported OS '{os_type}' detected. Please consult your OS documentation for how to install WireGuard.")
         return False
 
     if not ping_path:
-        ui.end_task(status, success=False, message="`ping` command not found. This is highly unusual.")
+        ui.print_error("`ping` command not found. This is highly unusual and suggests a broken system PATH.")
         return False
 
-    ui.end_task(status, success=True, message="Required tools are available.")
-    return True
+    return True # Should be unreachable, but for safety
 
 def derive_public_key(private_key: str) -> str | None:
     """
