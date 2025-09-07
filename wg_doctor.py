@@ -134,7 +134,13 @@ def main():
     diagnostics.check_endpoint_connectivity(config['endpoint_ip'])
 
     # --- Core Logic: Handshake or No Handshake? ---
-    interface_name = os.path.splitext(os.path.basename(args.config_file))[0]
+    ui.print_info("Attempting to dynamically find the correct WireGuard interface...")
+    interface_name = diagnostics.find_interface_for_peer(config['server_public_key'])
+
+    if not interface_name:
+        ui.print_warning("Could not dynamically find an active interface. Falling back to using the config file name.")
+        interface_name = os.path.splitext(os.path.basename(args.config_file))[0]
+
     has_handshake, message = diagnostics.check_handshake(interface_name)
 
     if not has_handshake:

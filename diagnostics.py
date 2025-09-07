@@ -101,9 +101,12 @@ def check_endpoint_connectivity(endpoint_ip: str) -> bool:
     command = ['ping', param, '1', endpoint_ip]
 
     try:
-        subprocess.run(command, check=True, capture_output=True)
+        subprocess.run(command, check=True, capture_output=True, timeout=10)
         ui.end_task(status, success=True, message=f"Endpoint {endpoint_ip} is reachable.")
         return True
+    except subprocess.TimeoutExpired:
+        ui.end_task(status, success=False, message=f"Ping timed out. The server at {endpoint_ip} is unresponsive.")
+        return False
     except subprocess.CalledProcessError:
         ui.end_task(status, success=False, message=f"Endpoint {endpoint_ip} is not reachable via ping.")
         ui.print_info("Note: Some servers disable ping (ICMP). This may not be a fatal error.")
@@ -112,6 +115,43 @@ def check_endpoint_connectivity(endpoint_ip: str) -> bool:
         # This should have been caught by check_tools, but as a fallback.
         ui.end_task(status, success=False, message="`ping` command not found.")
         return False
+
+def find_interface_for_peer(server_public_key: str) -> str | None:
+    """
+    Finds the correct interface name by looking for the server's public key in the dump.
+
+    Args:
+        server_public_key: The public key of the server peer.
+
+    Returns:
+        The name of the interface, or None if not found.
+    """
+    status = ui.start_task("Scanning for active WireGuard interfaces...")
+    try:
+        # 'wg show all dump' provides a stable, machine-readable format
+        result = subprocess.run(
+            ['wg', 'show', 'all', 'dump'],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10
+        )
+        for line in result.stdout.strip().split('\n'):
+            fields = line.split('\t')
+            # A peer line has more than 4 fields. The public key is the second field.
+            if len(fields) > 4 and fields[1] == server_public_key:
+                interface_name = fields[0]
+                ui.end_task(status, success=True, message=f"Found matching peer on interface '{interface_name}'.")
+                return interface_name
+
+        ui.end_task(status, success=False, message="Could not find an active interface for the given peer public key.")
+        return None
+    except subprocess.TimeoutExpired:
+        ui.end_task(status, success=False, message="`wg show` command timed out. The interface may be in a bad state.")
+        return None
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        ui.end_task(status, success=False, message="Failed to execute `wg show all dump`. WireGuard may not be active.")
+        return None
 
 def check_handshake(interface: str) -> Tuple[bool, str]:
     """
@@ -131,7 +171,8 @@ def check_handshake(interface: str) -> Tuple[bool, str]:
             ['wg', 'show', interface, 'latest-handshakes'],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
+            timeout=10
         )
 
         # The output is of the form: <public_key>\t<timestamp_unix>
@@ -158,6 +199,10 @@ def check_handshake(interface: str) -> Tuple[bool, str]:
             ui.end_task(status, success=False, message=message)
             return False, message
 
+    except subprocess.TimeoutExpired:
+        message = f"`wg show` command timed out while checking for handshake. The interface '{interface}' may be in a bad state."
+        ui.end_task(status, success=False, message=message)
+        return False, message
     except subprocess.CalledProcessError:
         message = f"Could not get handshake status. Is interface '{interface}' up?"
         ui.end_task(status, success=False, message=message)
