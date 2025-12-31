@@ -6,7 +6,7 @@ jobs:
   add_to_project:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/add-to-project@v1
+      - uses: actions/add-to-project@v1.0.2
         with:
           project-url: https://github.com/users/jstokke/projects/4
           github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
